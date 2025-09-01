@@ -319,7 +319,7 @@ def draw_kmap_grid(rows, cols, offset=0):
                 current_state = st.session_state[f'kmap_cell_{term_dec}']
                 next_state = {'0': '1', '1': 'x', 'x': '0'}[current_state]
                 st.session_state[f'kmap_cell_{term_dec}'] = next_state
-                st.experimental_rerun()
+                st.rerun()
 
 
 # --- Display K-Map(s) ---
