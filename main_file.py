@@ -2,49 +2,94 @@ import streamlit as st
 import pandas as pd
 from itertools import combinations, product
 import plotly.graph_objects as go
+import base64
 
 # --- Page Configuration ---
 st.set_page_config(layout="wide", page_title="Interactive K-Map Solver", page_icon="⚡")
 
-# --- Custom CSS for Styling ---
+# --- Custom Design ---
+def get_base64_of_bin_file(bin_file):
+    with open(bin_file, 'rb') as f:
+        data = f.read()
+    return base64.b64encode(data).decode()
+
+def set_png_as_page_bg(png_file_path):
+    # This function is not used as we will use a self-contained SVG for reliability.
+    pass
+
 def local_css():
-    st.markdown("""
+    # A subtle, self-contained SVG background for a professional "blueprint" feel.
+    bg_svg = """
+    <svg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 100 100">
+        <defs>
+            <pattern id="smallGrid" width="10" height="10" patternUnits="userSpaceOnUse">
+                <path d="M 10 0 L 0 0 0 10" fill="none" stroke="rgba(50, 100, 150, 0.1)" stroke-width="0.5"/>
+            </pattern>
+            <pattern id="grid" width="100" height="100" patternUnits="userSpaceOnUse">
+                <rect width="100" height="100" fill="url(#smallGrid)"/>
+                <path d="M 100 0 L 0 0 0 100" fill="none" stroke="rgba(50, 100, 150, 0.2)" stroke-width="1"/>
+            </pattern>
+        </defs>
+        <rect width="100%" height="100%" fill="url(#grid)" />
+    </svg>
+    """
+    bg_svg_b64 = base64.b64encode(bg_svg.encode('utf-8')).decode('utf-8')
+
+    st.markdown(f"""
         <style>
-        /* Reduce top padding of the main content area */
-        .main .block-container {
+        @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&family=Roboto+Mono&display=swap');
+        
+        /* Main background and font */
+        .stApp {{
+            background-color: #0f172a;
+            background-image: url("data:image/svg+xml;base64,{bg_svg_b64}");
+        }}
+        
+        /* Reduce top padding */
+        .main .block-container {{
             padding-top: 2rem;
-        }
-        .stButton>button {
+        }}
+        
+        /* K-Map Buttons */
+        .stButton>button {{
             width: 100%;
-            height: 5em; /* Made buttons larger */
-            font-size: 1.4em; /* Increased font size for bigger look */
+            height: 5.5em; /* Made buttons even larger */
+            font-size: 1.5em; /* Increased font size */
             font-weight: bold;
-            border-radius: 10px;
-            border: 2px solid #555;
+            font-family: 'Roboto Mono', monospace;
+            border-radius: 12px;
+            border: 2px solid #4a5568;
             transition: all 0.2s ease-in-out;
-        }
-        .stButton>button:hover {
-            border-color: #00bfff;
-            transform: scale(1.05);
-            box-shadow: 0 0 10px #00bfff;
-        }
-        h1, h2, h3 {
-            color: #eee;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.2);
+        }}
+        .stButton>button:hover {{
+            border-color: #38bdf8;
+            transform: translateY(-2px) scale(1.03);
+            box-shadow: 0 0 15px rgba(56, 189, 248, 0.5);
+        }}
+        
+        /* Headings */
+        h1, h2, h3 {{
+            color: #e2e8f0;
             text-align: center;
-        }
-        /* Style for the K-map variable labels */
-        .axis-label {
-            font-size: 1.2em;
-            font-weight: bold;
-            color: #00bfff;
+            font-family: 'Poppins', sans-serif;
+        }}
+        
+        /* K-map variable labels */
+        .axis-label {{
+            font-size: 1.3em;
+            font-weight: 600;
+            font-family: 'Poppins', sans-serif;
+            color: #38bdf8;
             text-align: center;
-        }
-        .row-label {
-             font-size: 1.1em;
-             font-weight: bold;
+        }}
+        .row-label {{
+             font-size: 1.2em;
+             font-weight: 600;
+             font-family: 'Roboto Mono', monospace;
              text-align: right;
-             padding-top: 1.75em;
-        }
+             padding-top: 2em;
+        }}
         </style>
     """, unsafe_allow_html=True)
 
@@ -69,8 +114,7 @@ def combine_terms(term1, term2):
     diff_count, new_term = 0, ""
     for c1, c2 in zip(term1, term2):
         if c1 != c2:
-            diff_count += 1
-            new_term += '-'
+            diff_count += 1; new_term += '-'
         else: new_term += c1
     return new_term if diff_count == 1 else None
 
@@ -84,8 +128,7 @@ def find_prime_implicants(minterms_dc, num_vars):
             combined = combine_terms(t1, t2)
             if combined:
                 new_terms.add(combined)
-                uncombined.discard(t1)
-                uncombined.discard(t2)
+                uncombined.discard(t1); uncombined.discard(t2)
         prime_implicants.update(uncombined)
         if not new_terms or terms == new_terms: break
         terms = new_terms
@@ -132,38 +175,22 @@ def generate_verilog(expression, variables, is_pos):
     if not verilog_expr or verilog_expr in ["()"]:
         verilog_expr = "1'b1" if is_pos else "1'b0"
 
-    lines = [
-        "`timescale 1ns/1ps",
-        "module minimized_logic(",
-        f"    input  {variables_str},",
-        "    output F",
-        ");", "",
-        f"    assign F = {verilog_expr};", "",
-        "endmodule"
-    ]
+    lines = [f"// Synthesizable module for: F = {expression}",
+        "`timescale 1ns/1ps", "module minimized_logic(",
+        f"    input  {variables_str},", "    output F", ");", "",
+        f"    assign F = {verilog_expr};", "", "endmodule"]
     return "\n".join(lines)
 
 def generate_testbench(variables):
     num_vars = len(variables)
     dut_ports = ",\n        ".join([f".{v}(i[{num_vars-1-idx}])" for idx, v in enumerate(variables)])
-    lines = [
-        "module tb_minimized_logic;", "",
-        f"    reg [{num_vars-1}:0] i;",
-        "    wire F;", "",
-        "    minimized_logic dut (",
-        f"        {dut_ports}",
-        "    );", "",
-        "    initial begin",
-        "        i = 0;",
-        "        $dumpfile(\"waveform.vcd\");",
-        "        $dumpvars(0, tb_minimized_logic);",
-        f"        for (i = 0; i < {2**num_vars}; i = i + 1) begin",
-        "            #10;",
-        "        end",
-        "        $finish;",
-        "    end",
-        "endmodule"
-    ]
+    lines = ["// Testbench to verify the logic", "module tb_minimized_logic;", "",
+        f"    reg [{num_vars-1}:0] i;", "    wire F;", "",
+        "    minimized_logic dut (", f"        {dut_ports}", "    );", "",
+        "    initial begin", "        i = 0;",
+        "        $dumpfile(\"waveform.vcd\");", "        $dumpvars(0, tb_minimized_logic);",
+        f"        for (i = 0; i < {2**num_vars}; i = i + 1) begin", "            #10;", "        end",
+        "        $finish;", "    end", "endmodule"]
     return "\n".join(lines)
 
 def generate_waveform(minimized_cover, variables, is_pos):
@@ -175,42 +202,60 @@ def generate_waveform(minimized_cover, variables, is_pos):
         for j, var in enumerate(variables):
             traces[var].append(int(input_bin[j]))
         
-        # *** BUG FIX: Correctly evaluate SOP vs POS ***
-        output_val = 1 if is_pos else 0 # Default output
-        for term in minimized_cover:
-            # Check if the current input is covered by this prime implicant
-            is_covered = all(p == m or p == '-' for p, m in zip(term, input_bin))
-            if is_covered:
-                output_val = 0 if is_pos else 1 # Set output and break
-                break
-        
-        traces['F'].append(output_val)
+        output_val = 0
+        if is_pos:
+            # POS logic: Output is 1 unless an input matches a maxterm group (PI of zeros), which makes a sum term 0.
+            final_val = 1
+            for term in minimized_cover:
+                # Check if the current input is covered by this prime implicant of ZEROs
+                is_maxterm_group = all(p == m or p == '-' for p, m in zip(term, input_bin))
+                if is_maxterm_group:
+                    final_val = 0  # This sum term is 0, so the whole product is 0
+                    break
+            traces['F'].append(final_val)
+        else:
+            # SOP logic: Output is 0 unless an input matches a minterm group (PI of ones).
+            final_val = 0
+            for term in minimized_cover:
+                # Check if the current input is covered by this prime implicant of ONEs
+                is_minterm_group = all(p == m or p == '-' for p, m in zip(term, input_bin))
+                if is_minterm_group:
+                    final_val = 1 # This product term is 1, so the whole sum is 1
+                    break
+            traces['F'].append(final_val)
 
     fig = go.Figure()
-    time_steps = list(range(2**num_vars + 1))
+    time_steps = list(range(2**num_vars))
     
     for i, (signal, values) in enumerate(traces.items()):
         y_pos = len(traces) - i
-        x_coords = [t for t in time_steps for _ in (0, 1)][1:-1]
+        # Create coordinates for the step-like waveform line
+        x_coords = [t for t in time_steps for _ in (0, 1)] 
+        x_coords.append(time_steps[-1] + 1)
+        x_coords.append(time_steps[-1] + 1)
+        
         y_coords = [y_pos + 0.4 * val for val in values for _ in (0, 1)]
+        y_coords.insert(0, y_coords[0])
+        y_coords.append(y_coords[-1])
+
+        # FIX: Create custom data for correct hover info (0 or 1)
+        hover_values = [v for v in values]
+        hover_values.append(values[-1])
         
-        # Make the 'F' trace thicker
-        line_width = 4 if signal == 'F' else 2
-        
-        fig.add_trace(go.Scatter(x=x_coords, y=y_coords, mode='lines', name=signal,
-                                 line=dict(shape='hv', width=line_width)))
+        fig.add_trace(go.Scatter(
+            x=x_coords, y=y_coords, mode='lines', name=signal,
+            line=dict(shape='hv', width=4 if signal == 'F' else 2),
+            customdata=hover_values,
+            hovertemplate='<b>Value</b>: %{customdata}<extra></extra>'
+        ))
 
     fig.update_layout(
         title='Simulated Digital Waveform',
-        yaxis=dict(
-            tickvals=list(range(len(traces), 0, -1)),
-            ticktext=list(traces.keys()),
-            showgrid=True, zeroline=False,
-            range=[0.5, len(traces) + 0.5]
-        ),
-        xaxis=dict(title='Time (simulation steps)'),
+        yaxis=dict(tickvals=list(range(len(traces), 0, -1)), ticktext=list(traces.keys()), showgrid=True, zeroline=False, range=[0.5, len(traces) + 0.5]),
+        xaxis=dict(title='Time (simulation steps)', showgrid=False, range=[-1, 2**num_vars]),
         height=300 + 50 * len(variables),
-        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+        plot_bgcolor="#1e293b", paper_bgcolor="#0f172a", font_color="#e2e8f0"
     )
     return fig
 
@@ -227,7 +272,6 @@ with st.sidebar:
         for i in range(2**num_vars): st.session_state[f'kmap_cell_{i}'] = '0'
         st.rerun()
 
-# Initialize session state for all 32 possible cells
 for i in range(32):
     if f'kmap_cell_{i}' not in st.session_state: st.session_state[f'kmap_cell_{i}'] = '0'
 
@@ -237,20 +281,15 @@ is_pos = (solve_for == 'POS')
 variables = ['A', 'B', 'C', 'D', 'E'][:num_vars]
 
 def draw_kmap_grid(rows, cols, row_vars, col_vars, num_vars, offset=0):
-    # --- Grid Labels ---
-    # Create a layout with a small spacer column for alignment
-    top_labels = st.columns([1.5, len(cols)]) 
+    top_labels = st.columns([1.5, len(cols)], gap="small") 
     with top_labels[0]:
         st.markdown(f"<div class='axis-label' style='text-align:right; padding-right:1em;'>{row_vars} \\ {col_vars}</div>", unsafe_allow_html=True)
     with top_labels[1]:
-        # Use sub-columns for perfect alignment of column headers
-        col_headers = st.columns(len(cols))
+        col_headers = st.columns(len(cols), gap="small")
         for i, col_label in enumerate(cols):
             col_headers[i].markdown(f"<div class='axis-label'>{col_label}</div>", unsafe_allow_html=True)
     
-    # --- Grid Body ---
     for r_idx, r_label in enumerate(rows):
-        # The gap="small" parameter brings columns closer
         row_ui_cols = st.columns([1.5] + [1] * len(cols), gap="small")
         row_ui_cols[0].markdown(f"<div class='row-label'>{r_label}</div>", unsafe_allow_html=True)
         
@@ -258,42 +297,31 @@ def draw_kmap_grid(rows, cols, row_vars, col_vars, num_vars, offset=0):
             prefix = '1' if offset == 16 else '0'
             term_bin = (prefix if num_vars == 5 else "") + r_label + c_label
             term_dec = int(term_bin, 2)
-            
             cell_state = st.session_state.get(f'kmap_cell_{term_dec}', '0')
             button_key = f"btn_{term_dec}"
             
-            # Use specific classes for button coloring instead of inline styles
-            st.markdown(f"""
-            <style>
+            st.markdown(f"""<style>
                 div[data-testid*="stButton"] button[data-testid*="{button_key}"] {{
-                    background-color: {'#90ee90' if cell_state == '1' else '#add8e6' if cell_state == 'x' else '#e0e0e0'};
-                    color: {'#006400' if cell_state == '1' else '#00008b' if cell_state == 'x' else '#333'};
-                }}
-            </style>
-            """, unsafe_allow_html=True)
+                    background-color: {'#4ade80' if cell_state == '1' else '#60a5fa' if cell_state == 'x' else '#334155'};
+                    color: {'#052e16' if cell_state == '1' else '#1e3a8a' if cell_state == 'x' else '#94a3b8'};
+                }}</style>""", unsafe_allow_html=True)
 
             if row_ui_cols[c_idx+1].button(cell_state.upper(), key=button_key, help=f"Minterm {term_dec}"):
-                current_state = st.session_state[f'kmap_cell_{term_dec}']
-                next_state = {'0': '1', '1': 'x', 'x': '0'}[current_state]
-                st.session_state[f'kmap_cell_{term_dec}'] = next_state
+                st.session_state[f'kmap_cell_{term_dec}'] = {'0': '1', '1': 'x', 'x': '0'}[cell_state]
                 st.rerun()
 
-# --- Centered Layout for K-Map ---
-_, center_col, _ = st.columns([1, 4, 1]) # Make center column wider
+_, center_col, _ = st.columns([1, 4, 1])
 with center_col:
     rows, cols = get_kmap_indices(num_vars)
     if num_vars == 2: row_vars, col_vars = "A", "B"
     elif num_vars == 3: row_vars, col_vars = "A", "BC"
     elif num_vars == 4: row_vars, col_vars = "AB", "CD"
-    else: row_vars, col_vars = "BC", "DE" # For 5-var map, A is separate
+    else: row_vars, col_vars = "BC", "DE"
 
     if num_vars == 5:
-        st.subheader(f"A = 0")
-        draw_kmap_grid(rows, cols, row_vars, col_vars, num_vars, offset=0)
-        st.subheader(f"A = 1")
-        draw_kmap_grid(rows, cols, row_vars, col_vars, num_vars, offset=16)
-    else:
-        draw_kmap_grid(rows, cols, row_vars, col_vars, num_vars)
+        st.subheader(f"A = 0"); draw_kmap_grid(rows, cols, row_vars, col_vars, num_vars, offset=0)
+        st.subheader(f"A = 1"); draw_kmap_grid(rows, cols, row_vars, col_vars, num_vars, offset=16)
+    else: draw_kmap_grid(rows, cols, row_vars, col_vars, num_vars)
 
 st.write("---")
 
@@ -304,14 +332,12 @@ if not minterms and not dont_cares:
     st.info("Click on the K-Map cells above to define the boolean function.")
 else:
     st.header("Results")
-    # --- Logic Calculation ---
     terms_to_solve = set(minterms)
     terms_for_pi = set(minterms) | set(dont_cares)
     
     if is_pos:
         zeros = set(range(2**num_vars)) - set(minterms) - set(dont_cares)
-        terms_to_solve = zeros
-        terms_for_pi = zeros | set(dont_cares)
+        terms_to_solve = zeros; terms_for_pi = zeros | set(dont_cares)
     
     prime_implicants = find_prime_implicants(terms_for_pi, num_vars)
     minimized_cover = get_minimal_cover(prime_implicants, terms_to_solve, num_vars)
@@ -320,17 +346,13 @@ else:
     elif not minimized_cover: result_expression = "0" if is_pos else "1"
     else:
         expr_parts = [term_to_expression(term, variables, is_pos) for term in sorted(minimized_cover)]
-        joiner = " * " if is_pos else " + "
-        result_expression = joiner.join(expr_parts)
+        result_expression = (" * ").join(expr_parts) if is_pos else (" + ").join(expr_parts)
     
-    # --- Display Results ---
     tab1, tab2, tab3 = st.tabs(["Minimized Expression", "Verilog Code", "Waveform"])
     with tab1:
         st.subheader("Minimized Boolean Expression")
-        latex_expr = result_expression.replace('*', ' \\cdot ').replace("'", "^{\\prime}")
-        st.latex(f"F({', '.join(variables)}) = {latex_expr}")
+        st.latex(f"F({', '.join(variables)}) = {result_expression.replace('*', ' \\cdot ').replace("'", '^{\\prime}')}")
     with tab2:
-        st.subheader("Generated Verilog")
         st.code(generate_verilog(result_expression, variables, is_pos), language='verilog')
         st.code(generate_testbench(variables), language='verilog')
     with tab3:
@@ -338,6 +360,5 @@ else:
         try:
             fig = generate_waveform(minimized_cover, variables, is_pos)
             st.plotly_chart(fig, use_container_width=True)
-        except Exception as e:
-            st.error(f"Could not generate waveform: {e}")
+        except Exception as e: st.error(f"Could not generate waveform: {e}")
 
