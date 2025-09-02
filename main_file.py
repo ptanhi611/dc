@@ -21,9 +21,9 @@ def local_css():
         
         /* K-MAP BUTTONS: TRULY HUMONGOUS AND BOLD */
         .stButton>button {{
-            width: 100%;
-            height: 9em; /* ENORMOUS HEIGHT */
-            font-size: 3.5em; /* ABSOLUTELY MASSIVE FONT */
+            width: 200%;
+            height: 18em; /* ENORMOUS HEIGHT */
+            font-size: 7em; /* ABSOLUTELY MASSIVE FONT */
             font-weight: 700; /* BOLDER FONT */
             font-family: 'Roboto Mono', monospace;
             border-radius: 24px; /* Larger radius for larger button */
