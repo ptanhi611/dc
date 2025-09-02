@@ -4,7 +4,6 @@ import plotly.graph_objects as go
 import base64
 
 # --- Page Configuration ---
-# Force Light Theme for better contrast as requested
 st.set_page_config(layout="wide", page_title="K-Map Logic Minimizer", page_icon="⚡", initial_sidebar_state="expanded")
 
 # --- Custom Design ---
@@ -13,62 +12,57 @@ def local_css():
         <style>
         @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&family=Roboto+Mono:wght@500&display=swap');
         
-        /* FORCE LIGHT THEME */
+        /* REVERT TO DARK THEME as requested */
         .stApp {{
-            background-color: #f0f2f6; /* Light gray background */
+            background-color: #0f172a; /* Dark blue background */
         }}
         
-        /* Main container padding */
         .main .block-container {{ padding-top: 2rem; }}
         
-        /* K-MAP BUTTONS: Dramatically larger and more interactive */
+        /* K-MAP BUTTONS: HUMONGOUS SIZE */
         .stButton>button {{
             width: 100%;
-            height: 7em; /* MASSIVELY TALLER */
-            font-size: 2.2em; /* HUGE FONT */
+            height: 8em; /* EXTREMELY TALL */
+            font-size: 2.5em; /* MASSIVE FONT */
             font-weight: 500;
             font-family: 'Roboto Mono', monospace;
-            border-radius: 15px;
-            border: 3px solid #d1d5db; /* Bolder border */
+            border-radius: 18px; /* Larger radius for larger button */
+            border: 4px solid #334155; /* Thicker border */
             transition: all 0.25s ease-in-out;
-            box-shadow: 0 5px 10px rgba(0, 0, 0, 0.1);
+            box-shadow: 0 6px 12px rgba(0, 0, 0, 0.4);
         }}
         .stButton>button:hover {{
-            border-color: #2563eb; /* Vibrant blue */
-            transform: translateY(-5px) scale(1.02);
-            box-shadow: 0 8px 25px rgba(37, 99, 235, 0.3); /* More dramatic shadow */
+            border-color: #38bdf8; /* Vibrant blue */
+            transform: translateY(-6px) scale(1.03); /* More dramatic lift */
+            box-shadow: 0 10px 30px rgba(56, 189, 248, 0.5);
         }}
 
         /* Make the Reset button smaller */
         [data-testid="stSidebar"] .stButton>button {{
              height: 3em;
              font-size: 1em;
+             border-width: 2px; /* Thinner border for smaller button */
         }}
         
-        /* Headings and Text in Dark Color for Contrast */
+        /* Headings and Text in Light Color for Contrast on Dark BG */
         h1, h2, h3, .stMarkdown {{
-            color: #111827; /* Dark text */
+            color: #e2e8f0; /* Light text */
             font-family: 'Poppins', sans-serif;
         }}
         h1, h2, h3 {{ text-align: center; }}
         
-        /* K-MAP AXIS LABELS: Clearer positioning and style */
-        .axis-label-top {{
-            font-size: 1.5em; font-weight: 600; font-family: 'Poppins', sans-serif;
-            color: #1e3a8a; text-align: center; padding-bottom: 0.5em;
-        }}
-        .axis-label-side {{
-            writing-mode: vertical-rl; transform: rotate(180deg);
-            font-size: 1.5em; font-weight: 600; font-family: 'Poppins', sans-serif;
-            color: #1e3a8a; text-align: center; margin: auto;
+        /* K-MAP AXIS LABELS: Re-engineered for maximum clarity */
+        .axis-label {{
+            font-size: 1.8em; font-weight: 600; font-family: 'Poppins', sans-serif;
+            color: #38bdf8; text-align: center;
         }}
         .gray-code-label {{
-             font-size: 1.4em; font-weight: 600; font-family: 'Roboto Mono', monospace;
-             text-align: center; color: #4b5563;
+             font-size: 1.6em; font-weight: 600; font-family: 'Roboto Mono', monospace;
+             text-align: center; color: #94a3b8; /* Lighter gray for codes */
         }}
-        .gray-code-label-side {{
-             padding-top: 2.8em; text-align: right;
-        }}
+        /* Aligning the grid perfectly */
+        .label-top-container {{ padding-bottom: 0.5em; }}
+        .label-side-container {{ padding-top: 2em; padding-right: 1em; text-align: right; }}
         </style>
     """, unsafe_allow_html=True)
 
@@ -185,13 +179,13 @@ def generate_waveform(kmap_states, num_vars):
         x_coords = [t for t in time_steps for _ in (0, 1)]; y_coords = [y_pos + 0.4 * val for val in values for _ in (0, 1)]
         hover_values = [v for v in values for _ in (0, 1)]
         fig.add_trace(go.Scatter(x=x_coords, y=y_coords, mode='lines', name=signal,
-            line=dict(shape='hv', width=4 if signal == 'F' else 2),
+            line=dict(shape='hv', width=4 if signal == 'F' else 2, color='#38bdf8' if signal != 'F' else '#f97316'),
             customdata=hover_values, hovertemplate='<b>Value</b>: %{customdata}<extra></extra>'))
     fig.update_layout(title='Simulated Digital Waveform',
         yaxis=dict(tickvals=list(range(len(traces), 0, -1)), ticktext=list(traces.keys()), showgrid=True, zeroline=False, range=[0.5, len(traces) + 0.5]),
         xaxis=dict(title='Time (simulation steps)', showgrid=False, range=[-0.5, 2**num_vars - 0.5]),
         height=300 + 50 * num_vars, legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
-        plot_bgcolor="#ffffff", paper_bgcolor="#f0f2f6", font_color="#111827")
+        plot_bgcolor="#1e293b", paper_bgcolor="#0f172a", font_color="#e2e8f0")
     return fig
 
 # --- Main Application UI ---
@@ -212,44 +206,42 @@ st.header("Interactive Karnaugh Map")
 variables = ['A', 'B', 'C', 'D', 'E'][:num_vars]
 
 def draw_kmap_grid(rows, cols, row_vars, col_vars, num_vars, offset=0):
-    # --- RE-ENGINEERED LAYOUT FOR CLARITY ---
-    grid_cols = st.columns([0.5, 1.5] + [1] * len(cols), gap="small")
-    
-    # Column Variable Name (Top)
-    with grid_cols[2]:
-        st.markdown(f"<div class='axis-label-top'>{col_vars}</div>", unsafe_allow_html=True)
-    
-    # Row Variable Name (Side, Vertical)
-    with grid_cols[0]:
-        st.markdown(f"<div class='axis-label-side'>{row_vars}</div>", unsafe_allow_html=True)
+    # --- COMPLETELY REBUILT LAYOUT FOR ABSOLUTE CLARITY ---
+    # Top Row: Column Variable Name and Gray Codes
+    top_row_cols = st.columns([2] + [1] * len(cols), gap="small")
+    with top_row_cols[0]:
+        # This is a spacer, but we put the row variables label here relative to the whole grid
+        st.markdown(f"<div class='axis-label' style='text-align:right; padding-top:2em; padding-right:0.5em;'>{row_vars} \\ {col_vars}</div>", unsafe_allow_html=True)
         
-    # Column Gray Codes
     for i, col_label in enumerate(cols):
-        grid_cols[i + 2].markdown(f"<div class='gray-code-label'>{col_label}</div>", unsafe_allow_html=True)
-    
-    # Draw Rows with Buttons
+        with top_row_cols[i + 1]:
+            st.markdown(f"<div class='gray-code-label label-top-container'>{col_label}</div>", unsafe_allow_html=True)
+
+    # Grid Rows: Row Gray Code + Buttons
     for r_label in rows:
-        row_ui_cols = st.columns([0.5, 1.5] + [1] * len(cols), gap="small") # CLOSER BUTTONS
-        row_ui_cols[1].markdown(f"<div class='gray-code-label gray-code-label-side'>{r_label}</div>", unsafe_allow_html=True)
+        grid_row_cols = st.columns([2] + [1] * len(cols), gap="small")
+        with grid_row_cols[0]:
+            st.markdown(f"<div class='gray-code-label label-side-container'>{r_label}</div>", unsafe_allow_html=True)
         
-        for c_label in cols:
-            prefix = '1' if offset == 16 else '0'
-            term_bin = (prefix if num_vars == 5 else "") + r_label + c_label
-            term_dec = int(term_bin, 2)
-            cell_state = st.session_state.get(f'kmap_cell_{term_dec}', '0')
-            button_key = f"btn_{term_dec}"
-            
-            st.markdown(f"""<style>
-                div[data-testid*="stButton"] button[data-testid*="{button_key}"] {{
-                    background-color: {'#22c55e' if cell_state == '1' else '#f97316' if cell_state == 'x' else '#e5e7eb'};
-                    color: {'#ffffff' if cell_state == '1' else '#ffffff' if cell_state == 'x' else '#4b5563'};
-                }}</style>""", unsafe_allow_html=True)
+        for i, c_label in enumerate(cols):
+            with grid_row_cols[i + 1]:
+                prefix = '1' if offset == 16 else '0'
+                term_bin = (prefix if num_vars == 5 else "") + r_label + c_label
+                term_dec = int(term_bin, 2)
+                cell_state = st.session_state.get(f'kmap_cell_{term_dec}', '0')
+                button_key = f"btn_{term_dec}"
+                
+                st.markdown(f"""<style>
+                    div[data-testid*="stButton"] button[data-testid*="{button_key}"] {{
+                        background-color: {'#22c55e' if cell_state == '1' else '#f59e0b' if cell_state == 'x' else '#475569'};
+                        color: {'#ffffff' if cell_state == '1' else '#ffffff' if cell_state == 'x' else '#cbd5e1'};
+                    }}</style>""", unsafe_allow_html=True)
 
-            if row_ui_cols[cols.index(c_label) + 2].button(cell_state.upper(), key=button_key, help=f"Minterm {term_dec}"):
-                st.session_state[f'kmap_cell_{term_dec}'] = {'0': '1', '1': 'x', 'x': '0'}[cell_state]
-                st.rerun()
+                if st.button(cell_state.upper(), key=button_key, help=f"Minterm {term_dec}"):
+                    st.session_state[f'kmap_cell_{term_dec}'] = {'0': '1', '1': 'x', 'x': '0'}[cell_state]
+                    st.rerun()
 
-_, center_col, _ = st.columns([1, 8, 1]) # Very wide center column
+_, center_col, _ = st.columns([1, 8, 1]) # Wide center column
 with center_col:
     rows, cols = get_kmap_indices(num_vars)
     if num_vars == 2: row_vars, col_vars = "A", "B"
