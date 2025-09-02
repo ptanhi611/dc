@@ -10,10 +10,14 @@ st.set_page_config(layout="wide", page_title="Interactive K-Map Solver", page_ic
 def local_css():
     st.markdown("""
         <style>
+        /* Reduce top padding of the main content area */
+        .main .block-container {
+            padding-top: 2rem;
+        }
         .stButton>button {
             width: 100%;
-            height: 4em; /* Made buttons slightly shorter for a compact grid */
-            font-size: 1.3em; /* Increased font size for bigger look */
+            height: 5em; /* Made buttons larger */
+            font-size: 1.4em; /* Increased font size for bigger look */
             font-weight: bold;
             border-radius: 10px;
             border: 2px solid #555;
@@ -22,25 +26,24 @@ def local_css():
         .stButton>button:hover {
             border-color: #00bfff;
             transform: scale(1.05);
-        }
-        .kmap-cell-0 {
-            background-color: #e0e0e0;
-            color: #333;
-        }
-        .kmap-cell-1 {
-            background-color: #90ee90; /* Light Green */
-            color: #006400; /* Dark Green */
-        }
-        .kmap-cell-x {
-            background-color: #add8e6; /* Light Blue */
-            color: #00008b; /* Dark Blue */
-        }
-        .main-container {
-            padding: 0 4rem; /* Add padding to the sides */
+            box-shadow: 0 0 10px #00bfff;
         }
         h1, h2, h3 {
             color: #eee;
             text-align: center;
+        }
+        /* Style for the K-map variable labels */
+        .axis-label {
+            font-size: 1.2em;
+            font-weight: bold;
+            color: #00bfff;
+            text-align: center;
+        }
+        .row-label {
+             font-size: 1.1em;
+             font-weight: bold;
+             text-align: right;
+             padding-top: 1.75em;
         }
         </style>
     """, unsafe_allow_html=True)
@@ -61,7 +64,7 @@ def get_kmap_indices(num_vars):
     if num_vars == 5: return gray_code(2), gray_code(3)
     return [], []
 
-# --- Quine-McCluskey Minimization Algorithm (with Don't Cares) ---
+# --- Quine-McCluskey Minimization Algorithm ---
 def combine_terms(term1, term2):
     diff_count, new_term = 0, ""
     for c1, c2 in zip(term1, term2):
@@ -124,60 +127,39 @@ def term_to_expression(term, variables, is_pos):
 
 # --- Verilog and Waveform Generation ---
 def generate_verilog(expression, variables, is_pos):
-    """Generates the synthesizable Verilog module."""
     variables_str = ", ".join(variables)
     verilog_expr = expression.replace("'", "~").replace("+", "|").replace("*", "&").replace(" ", "")
-    if not verilog_expr:
-        verilog_expr = "1'b0" if is_pos else "1'b1"
+    if not verilog_expr or verilog_expr in ["()"]:
+        verilog_expr = "1'b1" if is_pos else "1'b0"
 
     lines = [
         "`timescale 1ns/1ps",
         "module minimized_logic(",
         f"    input  {variables_str},",
         "    output F",
-        ");",
-        "",
-        f"    assign F = {verilog_expr};",
-        "",
+        ");", "",
+        f"    assign F = {verilog_expr};", "",
         "endmodule"
     ]
     return "\n".join(lines)
 
 def generate_testbench(variables):
-    """Generates the Verilog testbench."""
     num_vars = len(variables)
-    port_connections = [f".{variables[0]}(i[{num_vars-1}])"]
-    port_connections.extend([f".{v}(i[{num_vars-1-idx}])" for idx, v in enumerate(variables[1:])])
-    dut_ports = ",\n        ".join(port_connections)
-
+    dut_ports = ",\n        ".join([f".{v}(i[{num_vars-1-idx}])" for idx, v in enumerate(variables)])
     lines = [
-        "module tb_minimized_logic;",
-        "",
-        "    // Inputs",
+        "module tb_minimized_logic;", "",
         f"    reg [{num_vars-1}:0] i;",
-        "",
-        "    // Outputs",
-        "    wire F;",
-        "",
-        "    // Instantiate the Unit Under Test (UUT)",
+        "    wire F;", "",
         "    minimized_logic dut (",
         f"        {dut_ports}",
-        "    );",
-        "",
+        "    );", "",
         "    initial begin",
-        "        // Initialize Inputs",
         "        i = 0;",
-        "",
-        "        // Setup waveform dump",
         "        $dumpfile(\"waveform.vcd\");",
         "        $dumpvars(0, tb_minimized_logic);",
-        "        ",
-        "        // Loop through all possible input combinations",
         f"        for (i = 0; i < {2**num_vars}; i = i + 1) begin",
-        "            #10; // Wait 10 time units per combination",
+        "            #10;",
         "        end",
-        "",
-        "        // Finish simulation",
         "        $finish;",
         "    end",
         "endmodule"
@@ -193,33 +175,14 @@ def generate_waveform(minimized_cover, variables, is_pos):
         for j, var in enumerate(variables):
             traces[var].append(int(input_bin[j]))
         
-        output_val = 0
-        if is_pos: # Product of Sums
-            output_val = 1
-            if minimized_cover:
-                for term in minimized_cover:
-                    term_val = 0 
-                    for k, char in enumerate(term):
-                        if (char == '0' and input_bin[k] == '0') or \
-                           (char == '1' and input_bin[k] == '1'):
-                            term_val = 1
-                            break
-                    if term_val == 0:
-                        output_val = 0
-                        break
-        else: # Sum of Products
-            output_val = 0
-            if minimized_cover:
-                for term in minimized_cover:
-                    term_val = 1
-                    for k, char in enumerate(term):
-                        if (char == '0' and input_bin[k] == '1') or \
-                           (char == '1' and input_bin[k] == '0'):
-                            term_val = 0
-                            break
-                    if term_val == 1:
-                        output_val = 1
-                        break
+        # *** BUG FIX: Correctly evaluate SOP vs POS ***
+        output_val = 1 if is_pos else 0 # Default output
+        for term in minimized_cover:
+            # Check if the current input is covered by this prime implicant
+            is_covered = all(p == m or p == '-' for p, m in zip(term, input_bin))
+            if is_covered:
+                output_val = 0 if is_pos else 1 # Set output and break
+                break
         
         traces['F'].append(output_val)
 
@@ -230,16 +193,19 @@ def generate_waveform(minimized_cover, variables, is_pos):
         y_pos = len(traces) - i
         x_coords = [t for t in time_steps for _ in (0, 1)][1:-1]
         y_coords = [y_pos + 0.4 * val for val in values for _ in (0, 1)]
+        
+        # Make the 'F' trace thicker
+        line_width = 4 if signal == 'F' else 2
+        
         fig.add_trace(go.Scatter(x=x_coords, y=y_coords, mode='lines', name=signal,
-                                 line=dict(shape='hv', width=2)))
+                                 line=dict(shape='hv', width=line_width)))
 
     fig.update_layout(
-        title='Digital Waveform',
+        title='Simulated Digital Waveform',
         yaxis=dict(
             tickvals=list(range(len(traces), 0, -1)),
             ticktext=list(traces.keys()),
-            showgrid=True,
-            zeroline=False,
+            showgrid=True, zeroline=False,
             range=[0.5, len(traces) + 0.5]
         ),
         xaxis=dict(title='Time (simulation steps)'),
@@ -254,22 +220,16 @@ st.title("⚡ Interactive K-Map Solver & Verilog Generator")
 
 with st.sidebar:
     st.header("⚙️ Controls")
-    num_vars = st.selectbox(
-        "Number of Variables", 
-        options=[2, 3, 4, 5], 
-        index=2, 
-        key="num_vars_select"
-    )
+    num_vars = st.selectbox("Number of Variables", options=[2, 3, 4, 5], index=2, key="num_vars_select")
     solve_for = st.radio("Solve for", ('Sum of Products (SOP)', 'Product of Sums (POS)'), key="solve_for")
     
     if st.button("Reset K-Map"):
-        for i in range(2**num_vars):
-            st.session_state[f'kmap_cell_{i}'] = '0'
+        for i in range(2**num_vars): st.session_state[f'kmap_cell_{i}'] = '0'
         st.rerun()
 
+# Initialize session state for all 32 possible cells
 for i in range(32):
-    if f'kmap_cell_{i}' not in st.session_state:
-        st.session_state[f'kmap_cell_{i}'] = '0'
+    if f'kmap_cell_{i}' not in st.session_state: st.session_state[f'kmap_cell_{i}'] = '0'
 
 st.header("Interactive Karnaugh Map")
 
@@ -278,51 +238,54 @@ variables = ['A', 'B', 'C', 'D', 'E'][:num_vars]
 
 def draw_kmap_grid(rows, cols, row_vars, col_vars, num_vars, offset=0):
     # --- Grid Labels ---
-    label_cols = st.columns([1, len(cols)])
-    with label_cols[0]:
-        st.markdown(f"<div style='text-align:right; padding-top:2.5em; font-weight:bold; color: #00bfff;'>{row_vars} \\</div>", unsafe_allow_html=True)
-    with label_cols[1]:
-        st.markdown(f"<div style='text-align:center; font-weight:bold; color: #00bfff;'>{col_vars}</div>", unsafe_allow_html=True)
+    # Create a layout with a small spacer column for alignment
+    top_labels = st.columns([1.5, len(cols)]) 
+    with top_labels[0]:
+        st.markdown(f"<div class='axis-label' style='text-align:right; padding-right:1em;'>{row_vars} \\ {col_vars}</div>", unsafe_allow_html=True)
+    with top_labels[1]:
+        # Use sub-columns for perfect alignment of column headers
+        col_headers = st.columns(len(cols))
+        for i, col_label in enumerate(cols):
+            col_headers[i].markdown(f"<div class='axis-label'>{col_label}</div>", unsafe_allow_html=True)
     
     # --- Grid Body ---
     for r_idx, r_label in enumerate(rows):
-        row_cols = st.columns([1] + [1] * len(cols))
-        row_cols[0].markdown(f"<div style='text-align: right; margin-top: 1.5em; font-weight:bold;'>{r_label}</div>", unsafe_allow_html=True)
+        # The gap="small" parameter brings columns closer
+        row_ui_cols = st.columns([1.5] + [1] * len(cols), gap="small")
+        row_ui_cols[0].markdown(f"<div class='row-label'>{r_label}</div>", unsafe_allow_html=True)
         
         for c_idx, c_label in enumerate(cols):
-            if num_vars == 5:
-                prefix = '1' if offset == 16 else '0'
-                term_bin = prefix + r_label + c_label
-            else:
-                term_bin = r_label + c_label
+            prefix = '1' if offset == 16 else '0'
+            term_bin = (prefix if num_vars == 5 else "") + r_label + c_label
             term_dec = int(term_bin, 2)
             
             cell_state = st.session_state.get(f'kmap_cell_{term_dec}', '0')
-            
             button_key = f"btn_{term_dec}"
+            
+            # Use specific classes for button coloring instead of inline styles
             st.markdown(f"""
             <style>
-                div[data-testid*="stHorizontalBlock"] div[data-testid*="stButton"] button[data-testid*="{button_key}"] {{
+                div[data-testid*="stButton"] button[data-testid*="{button_key}"] {{
                     background-color: {'#90ee90' if cell_state == '1' else '#add8e6' if cell_state == 'x' else '#e0e0e0'};
                     color: {'#006400' if cell_state == '1' else '#00008b' if cell_state == 'x' else '#333'};
                 }}
             </style>
             """, unsafe_allow_html=True)
 
-            if row_cols[c_idx+1].button(cell_state.upper(), key=button_key, help=f"Minterm {term_dec}"):
+            if row_ui_cols[c_idx+1].button(cell_state.upper(), key=button_key, help=f"Minterm {term_dec}"):
                 current_state = st.session_state[f'kmap_cell_{term_dec}']
                 next_state = {'0': '1', '1': 'x', 'x': '0'}[current_state]
                 st.session_state[f'kmap_cell_{term_dec}'] = next_state
                 st.rerun()
 
 # --- Centered Layout for K-Map ---
-_, center_col, _ = st.columns([1, 2, 1])
+_, center_col, _ = st.columns([1, 4, 1]) # Make center column wider
 with center_col:
     rows, cols = get_kmap_indices(num_vars)
     if num_vars == 2: row_vars, col_vars = "A", "B"
     elif num_vars == 3: row_vars, col_vars = "A", "BC"
     elif num_vars == 4: row_vars, col_vars = "AB", "CD"
-    else: row_vars, col_vars = "BC", "DE"
+    else: row_vars, col_vars = "BC", "DE" # For 5-var map, A is separate
 
     if num_vars == 5:
         st.subheader(f"A = 0")
@@ -341,46 +304,35 @@ if not minterms and not dont_cares:
     st.info("Click on the K-Map cells above to define the boolean function.")
 else:
     st.header("Results")
+    # --- Logic Calculation ---
     terms_to_solve = set(minterms)
     terms_for_pi = set(minterms) | set(dont_cares)
     
     if is_pos:
-        all_terms = set(range(2**num_vars))
-        zeros = all_terms - set(minterms) - set(dont_cares)
+        zeros = set(range(2**num_vars)) - set(minterms) - set(dont_cares)
         terms_to_solve = zeros
         terms_for_pi = zeros | set(dont_cares)
     
-    result_expression = ""
-    minimized_cover = []
+    prime_implicants = find_prime_implicants(terms_for_pi, num_vars)
+    minimized_cover = get_minimal_cover(prime_implicants, terms_to_solve, num_vars)
     
-    if not terms_to_solve:
-         result_expression = "0" if is_pos else "1"
+    if not terms_to_solve: result_expression = "1" if is_pos else "0"
+    elif not minimized_cover: result_expression = "0" if is_pos else "1"
     else:
-        prime_implicants = find_prime_implicants(terms_for_pi, num_vars)
-        minimized_cover = get_minimal_cover(prime_implicants, terms_to_solve, num_vars)
-        
-        if not minimized_cover:
-            result_expression = "1" if is_pos else "0"
-        else:
-            expr_parts = [term_to_expression(term, variables, is_pos) for term in sorted(minimized_cover)]
-            joiner = " * " if is_pos else " + "
-            result_expression = joiner.join(expr_parts)
+        expr_parts = [term_to_expression(term, variables, is_pos) for term in sorted(minimized_cover)]
+        joiner = " * " if is_pos else " + "
+        result_expression = joiner.join(expr_parts)
     
+    # --- Display Results ---
     tab1, tab2, tab3 = st.tabs(["Minimized Expression", "Verilog Code", "Waveform"])
-
     with tab1:
         st.subheader("Minimized Boolean Expression")
         latex_expr = result_expression.replace('*', ' \\cdot ').replace("'", "^{\\prime}")
         st.latex(f"F({', '.join(variables)}) = {latex_expr}")
-
     with tab2:
         st.subheader("Generated Verilog")
-        module_code = generate_verilog(result_expression, variables, is_pos)
-        tb_code = generate_testbench(variables)
-        
-        st.code(module_code, language='verilog')
-        st.code(tb_code, language='verilog')
-
+        st.code(generate_verilog(result_expression, variables, is_pos), language='verilog')
+        st.code(generate_testbench(variables), language='verilog')
     with tab3:
         st.subheader("Simulated Waveform")
         try:
