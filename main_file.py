@@ -10,59 +10,65 @@ st.set_page_config(layout="wide", page_title="K-Map Logic Minimizer", page_icon=
 def local_css():
     st.markdown(f"""
         <style>
-        @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&family=Roboto+Mono:wght@500&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&family=Roboto+Mono:wght@700&display=swap');
         
-        /* REVERT TO DARK THEME as requested */
+        /* DARK THEME */
         .stApp {{
             background-color: #0f172a; /* Dark blue background */
         }}
         
-        .main .block-container {{ padding-top: 2rem; }}
+        .main .block-container {{ padding-top: 2rem; padding-left: 2rem; padding-right: 2rem;}}
         
-        /* K-MAP BUTTONS: HUMONGOUS SIZE */
+        /* K-MAP BUTTONS: TRULY HUMONGOUS AND BOLD */
         .stButton>button {{
             width: 100%;
-            height: 8em; /* EXTREMELY TALL */
-            font-size: 2.5em; /* MASSIVE FONT */
-            font-weight: 500;
+            height: 9em; /* ENORMOUS HEIGHT */
+            font-size: 3.5em; /* ABSOLUTELY MASSIVE FONT */
+            font-weight: 700; /* BOLDER FONT */
             font-family: 'Roboto Mono', monospace;
-            border-radius: 18px; /* Larger radius for larger button */
-            border: 4px solid #334155; /* Thicker border */
+            border-radius: 24px; /* Larger radius for larger button */
+            border: 6px solid #475569; /* Much Thicker border */
             transition: all 0.25s ease-in-out;
-            box-shadow: 0 6px 12px rgba(0, 0, 0, 0.4);
+            box-shadow: 0 8px 16px rgba(0, 0, 0, 0.5);
+            display: flex;
+            justify-content: center;
+            align-items: center;
         }}
         .stButton>button:hover {{
-            border-color: #38bdf8; /* Vibrant blue */
-            transform: translateY(-6px) scale(1.03); /* More dramatic lift */
-            box-shadow: 0 10px 30px rgba(56, 189, 248, 0.5);
+            border-color: #7dd3fc; /* Lighter, more vibrant blue */
+            transform: translateY(-8px) scale(1.04); /* More dramatic lift */
+            box-shadow: 0 12px 35px rgba(125, 211, 252, 0.4);
         }}
 
         /* Make the Reset button smaller */
         [data-testid="stSidebar"] .stButton>button {{
              height: 3em;
              font-size: 1em;
-             border-width: 2px; /* Thinner border for smaller button */
+             border-width: 2px;
         }}
         
-        /* Headings and Text in Light Color for Contrast on Dark BG */
+        /* Headings and Text */
         h1, h2, h3, .stMarkdown {{
             color: #e2e8f0; /* Light text */
             font-family: 'Poppins', sans-serif;
         }}
         h1, h2, h3 {{ text-align: center; }}
         
-        /* K-MAP AXIS LABELS: Re-engineered for maximum clarity */
+        /* K-MAP AXIS LABELS: Rebuilt for perfect alignment */
+        .label-container {{
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100%;
+        }}
         .axis-label {{
-            font-size: 1.8em; font-weight: 600; font-family: 'Poppins', sans-serif;
-            color: #38bdf8; text-align: center;
+            font-size: 2em; font-weight: 600; font-family: 'Poppins', sans-serif;
+            color: #7dd3fc;
         }}
         .gray-code-label {{
-             font-size: 1.6em; font-weight: 600; font-family: 'Roboto Mono', monospace;
-             text-align: center; color: #94a3b8; /* Lighter gray for codes */
+             font-size: 1.8em; font-weight: 700; font-family: 'Roboto Mono', monospace;
+             color: #94a3b8;
         }}
-        /* Aligning the grid perfectly */
-        .label-top-container {{ padding-bottom: 0.5em; }}
-        .label-side-container {{ padding-top: 2em; padding-right: 1em; text-align: right; }}
         </style>
     """, unsafe_allow_html=True)
 
@@ -205,24 +211,36 @@ for i in range(32):
 st.header("Interactive Karnaugh Map")
 variables = ['A', 'B', 'C', 'D', 'E'][:num_vars]
 
+# --- NEW, ROBUST GRID DRAWING FUNCTION ---
 def draw_kmap_grid(rows, cols, row_vars, col_vars, num_vars, offset=0):
-    # --- COMPLETELY REBUILT LAYOUT FOR ABSOLUTE CLARITY ---
-    # Top Row: Column Variable Name and Gray Codes
-    top_row_cols = st.columns([2] + [1] * len(cols), gap="small")
-    with top_row_cols[0]:
-        # This is a spacer, but we put the row variables label here relative to the whole grid
-        st.markdown(f"<div class='axis-label' style='text-align:right; padding-top:2em; padding-right:0.5em;'>{row_vars} \\ {col_vars}</div>", unsafe_allow_html=True)
-        
-    for i, col_label in enumerate(cols):
-        with top_row_cols[i + 1]:
-            st.markdown(f"<div class='gray-code-label label-top-container'>{col_label}</div>", unsafe_allow_html=True)
+    # This function uses more lines of code to be more explicit and guarantee alignment.
+    # It creates a clear structure of containers for perfect positioning.
 
-    # Grid Rows: Row Gray Code + Buttons
+    # TOP LABELS ROW (Column variables and gray codes)
+    # The first item is a spacer to align with the row-label column
+    top_label_cols = st.columns([1.5] + [1] * len(cols), gap="small")
+    
+    with top_label_cols[0]:
+        # Top-left corner label for variable names
+        st.markdown(f"""
+            <div class="label-container" style="justify-content: flex-end; padding-right: 1em;">
+                <span class="axis-label">{row_vars} \ {col_vars}</span>
+            </div>
+        """, unsafe_allow_html=True)
+
+    for i, col_label in enumerate(cols):
+        with top_label_cols[i + 1]:
+            st.markdown(f"<div class='label-container'><span class='gray-code-label'>{col_label}</span></div>", unsafe_allow_html=True)
+
+    # K-MAP ROWS (Row gray codes and buttons)
     for r_label in rows:
-        grid_row_cols = st.columns([2] + [1] * len(cols), gap="small")
-        with grid_row_cols[0]:
-            st.markdown(f"<div class='gray-code-label label-side-container'>{r_label}</div>", unsafe_allow_html=True)
+        grid_row_cols = st.columns([1.5] + [1] * len(cols), gap="small")
         
+        # First column is for the row gray code label
+        with grid_row_cols[0]:
+            st.markdown(f"<div class='label-container' style='justify-content: flex-end; padding-right: 1em;'><span class='gray-code-label'>{r_label}</span></div>", unsafe_allow_html=True)
+        
+        # Subsequent columns are the clickable buttons
         for i, c_label in enumerate(cols):
             with grid_row_cols[i + 1]:
                 prefix = '1' if offset == 16 else '0'
@@ -241,16 +259,17 @@ def draw_kmap_grid(rows, cols, row_vars, col_vars, num_vars, offset=0):
                     st.session_state[f'kmap_cell_{term_dec}'] = {'0': '1', '1': 'x', 'x': '0'}[cell_state]
                     st.rerun()
 
-_, center_col, _ = st.columns([1, 8, 1]) # Wide center column
+_, center_col, _ = st.columns([1, 10, 1]) # Even wider center column for the massive buttons
 with center_col:
     rows, cols = get_kmap_indices(num_vars)
     if num_vars == 2: row_vars, col_vars = "A", "B"
     elif num_vars == 3: row_vars, col_vars = "A", "BC"
     elif num_vars == 4: row_vars, col_vars = "AB", "CD"
-    else: row_vars, col_vars = "BC", "DE" # A is the 5th variable handled separately
+    else: row_vars, col_vars = "BC", "DE" # A is the 5th variable
 
     if num_vars == 5:
         st.subheader(f"A = 0"); draw_kmap_grid(rows, cols, row_vars, col_vars, num_vars, offset=0)
+        st.markdown("<br>", unsafe_allow_html=True) # Add space between maps
         st.subheader(f"A = 1"); draw_kmap_grid(rows, cols, row_vars, col_vars, num_vars, offset=16)
     else: draw_kmap_grid(rows, cols, row_vars, col_vars, num_vars)
 
@@ -275,7 +294,7 @@ else:
     tab1, tab2, tab3 = st.tabs(["Minimized Expressions", "Optimized Verilog", "Waveform"])
     
     with tab1:
-        col1, col2 = st.columns(2) # SIDE-BY-SIDE DISPLAY
+        col1, col2 = st.columns(2)
         with col1:
             st.subheader("Sum of Products (SOP)")
             st.latex(f"F = {sop_expression.replace('*', ' \\cdot ').replace('+', ' + ').replace('()', '0').replace('\'', '^{\\prime}')}")
