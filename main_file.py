@@ -196,10 +196,10 @@ def generate_waveform(kmap_states, num_vars):
 
 # --- Main Application UI ---
 local_css()
-st.title("⚡ K-Map Logic Minimizer")
+st.title(" K-Map Logic Minimizer")
 
 with st.sidebar:
-    st.header("⚙️ Controls")
+    st.header("Controls")
     num_vars = st.selectbox("Number of Variables", options=[2, 3, 4, 5], index=2, key="num_vars_select")
     if st.button("Reset K-Map"):
         for i in range(2**num_vars): st.session_state[f'kmap_cell_{i}'] = '0'
